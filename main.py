@@ -1,3 +1,4 @@
+import altair as alt
 import numpy as np  # noqa
 import pandas as pd
 import streamlit as st
@@ -5,6 +6,179 @@ from matplotlib import pyplot as plt
 from pandas.api.types import is_numeric_dtype
 from sklearn import cluster
 from sklearn.linear_model import LinearRegression
+
+
+def alldata(data):
+    st.write(data[:100])
+
+
+def profit(data, agg_func, typelabel):
+    st.markdown(f"## {typelabel} numbers")
+
+    def countries():
+        st.markdown("Summed up profits by country")
+        countrydata = (
+            data.loc[:, ["Profit", "Country"]]
+            .groupby("Country")
+            .agg(agg_func)
+            .reset_index()
+            .sort_values("Profit")
+        )
+        top, bottom = st.beta_columns(2)
+        top.markdown("### Top countries")
+        top.altair_chart(
+            alt.Chart(countrydata[-10:])
+            .mark_bar()
+            .encode(
+                x=alt.X("Country", sort="-y"),
+                y=alt.Y("Profit", axis=alt.Axis(title=typelabel)),
+            ),
+            use_container_width=True,
+        )
+        bottom.markdown("### Bottom countries")
+        bottom.altair_chart(
+            alt.Chart(countrydata[:10])
+            .mark_bar()
+            .encode(
+                x=alt.X("Country", sort="-y"),
+                y=alt.Y("Profit", axis=alt.Axis(title=typelabel)),
+            ),
+            use_container_width=True,
+        )
+
+    def market():
+        st.markdown("Summed up profits by market")
+        worlddata = (
+            data.loc[:, ["Profit", "Market"]]
+            .groupby("Market")
+            .agg(agg_func)
+            .reset_index()
+            .sort_values("Profit")
+        )
+        st.altair_chart(
+            alt.Chart(worlddata)
+            .mark_bar()
+            .encode(
+                x=alt.X("Market", sort="-y"),
+                y=alt.Y("Profit", axis=alt.Axis(title=typelabel)),
+            ),
+            use_container_width=True,
+        )
+
+    def weekdays():
+        st.markdown("Summed up profits by day of the week")
+
+        weekdaydata = data.loc[:, ["Profit", "Order Date"]].copy()
+        days = [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+        ]
+        weekdaydata["Weekday"] = [
+            f"{days.index(i)} {i}" for i in weekdaydata["Order Date"].dt.day_name()
+        ]
+        weekdaydata = (
+            weekdaydata.groupby("Weekday")
+            .agg(agg_func)
+            .reset_index()
+            .sort_values("Weekday")
+        )
+
+        st.altair_chart(
+            alt.Chart(weekdaydata)
+            .mark_bar()
+            .encode(
+                x=alt.X("Weekday", sort="x"),
+                y=alt.Y("Profit", axis=alt.Axis(title=typelabel)),
+            ),
+            use_container_width=True,
+        )
+
+    def months():
+        st.markdown("Summed up profits by month")
+
+        monthdata = data.loc[:, ["Profit", "Order Date"]].copy()
+        days = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ]
+        monthdata["Month"] = [
+            f"{days.index(i):02} {i}" for i in monthdata["Order Date"].dt.month_name()
+        ]
+        monthdata = (
+            monthdata.groupby("Month").agg(agg_func).reset_index().sort_values("Month")
+        )
+
+        st.altair_chart(
+            alt.Chart(monthdata)
+            .mark_bar()
+            .encode(
+                x=alt.X("Month", sort="x"),
+                y=alt.Y("Profit", axis=alt.Axis(title=typelabel)),
+            ),
+            use_container_width=True,
+        )
+
+    def producttype():
+        st.markdown("Summed up profits by product type")
+        allproducttypedata = data.loc[:, ["Profit", "Category", "Sub-Category"]]
+        producttypedata = (
+            allproducttypedata.groupby("Category")
+            .agg(agg_func)
+            .reset_index()
+            .sort_values("Profit")
+        )
+        st.altair_chart(
+            alt.Chart(producttypedata)
+            .mark_bar()
+            .encode(
+                x=alt.X("Category", sort="-y"),
+                y=alt.Y("Profit", axis=alt.Axis(title=typelabel)),
+            ),
+            use_container_width=True,
+        )
+
+        st.markdown("Summed up profits by product sub-type")
+        subproducttypedata = (
+            allproducttypedata.groupby("Sub-Category")
+            .agg(agg_func)
+            .reset_index()
+            .sort_values("Profit")
+        )
+        st.altair_chart(
+            alt.Chart(subproducttypedata)
+            .mark_bar()
+            .encode(
+                x=alt.X("Sub-Category", sort="-y"),
+                y=alt.Y("Profit", axis=alt.Axis(title=typelabel)),
+            ),
+            use_container_width=True,
+        )
+
+    TYPES = {
+        "Countries": countries,
+        "Market": market,
+        "Day of the week": weekdays,
+        "Month": months,
+        "Type of product": producttype,
+    }
+    datatype = st.radio("Choose dimension", list(TYPES.keys()))
+    st.markdown("---")
+    TYPES[datatype]()
 
 
 def hist_generator(data, ax):
@@ -17,22 +191,26 @@ def hist_generator(data, ax):
 
 def overview(data):
     st.write(f"Total {len(data)} entries")
-    st.markdown("## Column descriptions")
-    for column in data.columns:
-        st.markdown(f"### {column}\n```{data.dtypes[column]}```")
-        if data.dtypes[column] == object:
-            st.write(f"{data[column].nunique()} unique values")
-        else:
-            st.write(f"min: {data[column].min()}")
-            st.write(f"median: {data[column].median()}")
-            st.write(f"max: {data[column].max()}")
+    col1, col2 = st.beta_columns([1, 2])
+    selected_column = col1.radio("Choose column", list(data.columns))
 
-        if not data.dtypes[column] == object or data[column].nunique() < 1000:
-            st.write("Histogram")
-            fig, ax = plt.subplots(1, 1)
-            ax.locator_params(axis="x", nbins=7)
-            hist_generator(data, ax)(column)
-            st.pyplot(fig)
+    col2.markdown(f"### {selected_column}\n```{data.dtypes[selected_column]}```")
+    if data.dtypes[selected_column] == object:
+        col2.write(f"{data[selected_column].nunique()} unique values")
+    else:
+        col2.write(f"min: {data[selected_column].min()}")
+        col2.write(f"median: {data[selected_column].median()}")
+        col2.write(f"max: {data[selected_column].max()}")
+
+    if (
+        not data.dtypes[selected_column] == object
+        or data[selected_column].nunique() < 1000
+    ):
+        col2.write("Histogram")
+        fig, ax = plt.subplots(1, 1)
+        ax.locator_params(axis="x", nbins=7)
+        hist_generator(data, ax)(selected_column)
+        col2.pyplot(fig)
 
 
 def regression(data):
@@ -95,18 +273,11 @@ def clustering(data):
     CLUSTERING_METHODS = {
         algo.__name__: algo
         for algo in [
-            # cluster.AffinityPropagation,
             cluster.KMeans,
             cluster.MiniBatchKMeans,
             cluster.AgglomerativeClustering,
             cluster.Birch,
-            # cluster.DBSCAN,
-            # cluster.FeatureAgglomeration,
-            # cluster.MeanShift,
-            # cluster.OPTICS,
-            # cluster.SpectralClustering,
-            # cluster.SpectralBiclustering,
-            # cluster.SpectralCoclustering,
+            cluster.DBSCAN,
         ]
     }
 
@@ -115,7 +286,11 @@ def clustering(data):
         list(CLUSTERING_METHODS.keys()),
     )
     selectedmethod = CLUSTERING_METHODS[selectedmethodname]
-    n_clusters = st.sidebar.number_input(label="Number of clusters", value=8)
+    eps = 0.5
+    if selectedmethodname == "DBSCAN":
+        eps = st.sidebar.number_input(label="Density", value=0.5)
+    else:
+        n_clusters = st.sidebar.number_input(label="Number of clusters", value=8)
     datapoints = st.sidebar.number_input(label="Number of datapoints", value=1000)
 
     # plotting
@@ -129,16 +304,22 @@ def clustering(data):
             )
 
     normalized = normalized.fillna(0)
-    clustered = selectedmethod(n_clusters=n_clusters).fit(normalized)
+    if selectedmethodname == "DBSCAN":
+        clustered = selectedmethod(eps).fit(normalized)
+        n_clusters = len(set(clustered.labels_))
+    else:
+        clustered = selectedmethod(n_clusters=n_clusters).fit(normalized)
     fig, ax = plt.subplots()
     cmap = plt.cm.get_cmap("hsv", n_clusters)
-    ax.scatter(x=normalized[dim1], y=normalized[dim2], c=clustered.labels_, cmap=cmap)
+    colors = np.ma.array(clustered.labels_, mask=clustered.labels_ < 0)
+    ax.scatter(x=normalized[dim1], y=normalized[dim2], c=colors, cmap=cmap)
     ax.set_xlabel(dim1)
     ax.set_ylabel(dim2)
     logscale = st.sidebar.checkbox("Log-scale of data")
     if logscale:
         ax.set_yscale("log")
         ax.set_xscale("log")
+    ax.axis("square")
     ax.set_title("Clustering")
     st.pyplot(fig)
 
@@ -172,18 +353,34 @@ def main():
     st.title("Supermarket Sales Analytics")
 
     data = loaddata()
-    st.write("Input data set (first 100 entries)")
-    st.write(data[:100])
 
-    VIEWS = {
-        "Data overview": overview,
-        "Regression": regression,
-        "Coorelation": coorelation,
-        "Clustering": clustering,
-    }
-    view = st.sidebar.radio("View", list(VIEWS.keys()))
-    st.sidebar.markdown("---")
-    VIEWS.get(view)(data)
+    view_type = st.sidebar.selectbox(
+        "Analytics type", ["Business Data", "Data Exploration"]
+    )
+    if view_type == "Business Data":
+        BUSINESS_VIEWS = {
+            "Profit numbers": lambda d: profit(d, sum, "Profit"),
+            "Sale numbers": lambda d: profit(d, len, "Sales"),
+            "Data": alldata,
+        }
+
+        st.sidebar.markdown("## Business analytics")
+        view = st.sidebar.radio("Choose a tool", list(BUSINESS_VIEWS.keys()))
+        st.sidebar.markdown("---")
+        BUSINESS_VIEWS.get(view)(data)
+    else:
+        st.write("Input data set (first 100 entries)")
+        st.write(data[:100])
+        ADVANCED_VIEWS = {
+            "Data overview": overview,
+            "Regression": regression,
+            "Coorelation": coorelation,
+            "Clustering": clustering,
+        }
+        st.sidebar.markdown("## Advanced data exploration")
+        view = st.sidebar.radio("Choose a tool", list(ADVANCED_VIEWS.keys()))
+        st.sidebar.markdown("---")
+        ADVANCED_VIEWS.get(view)(data)
 
 
 main()
